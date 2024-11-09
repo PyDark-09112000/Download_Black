@@ -17,3 +17,7 @@ O **Download Black** é uma interface gráfica desenvolvida em Python usando Tki
 ## Aviso de Segurança
 
 **Nota Importante**: Alguns antivírus podem detectar este script como um vírus devido às funcionalidades de download e acesso à internet. Para evitar problemas durante o download e a execução, recomendamos desativar temporariamente o antivírus antes de baixar e executar o script.
+
+## Exemplo de JSON
+
+Para facilitar o uso e testes, deixei um arquivo chamado `data.json` como exemplo. Esse arquivo contém dados de amostra que podem ser utilizados para visualizar como a interface funciona.
