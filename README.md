@@ -1,5 +1,4 @@
 # Download Black
-Descrição
 O Download Black é uma interface gráfica desenvolvida em Python usando Tkinter. Este projeto permite aos usuários visualizar e interagir com conteúdo de um arquivo JSON, exibindo imagens, descrições, links de vídeo e links de download diretamente na interface.
 
 Funcionalidades
