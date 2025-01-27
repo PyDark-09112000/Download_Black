@@ -1,11 +1,7 @@
 import requests
 import tkinter as tk
-from tkinter import ttk
-from PIL import Image, ImageTk
-from io import BytesIO
-
-# URL do JSON raw inicial
-default_url = ""
+from tkinter import ttk, messagebox
+import pyperclip  # Importar o pyperclip para copiar para a área de transferência
 
 def download_json(url):
     """Função para baixar o JSON"""
@@ -13,130 +9,127 @@ def download_json(url):
     response.raise_for_status()
     return response.json()
 
-def download_image(image_url):
-    """Função para baixar uma imagem a partir de uma URL"""
-    response = requests.get(image_url)
-    response.raise_for_status()
-    return Image.open(BytesIO(response.content))
-
 def open_link(url):
     """Função para abrir um link no navegador padrão"""
     import webbrowser
     webbrowser.open(url)
 
-def create_file_name_label(parent, text, row, column, padx=0, pady=10, sticky="w"):
-    """Função para criar um label de nome de arquivo com parâmetros ajustáveis"""
-    file_name_label = tk.Label(parent, text=text, font=("Helvetica", 16, "bold"), bg=bg_color, fg=fg_color)
-    file_name_label.grid(row=row, column=column, padx=padx, pady=pady, sticky=sticky)
-    return file_name_label
+def copy_to_clipboard(text):
+    """Função para copiar texto para a área de transferência"""
+    pyperclip.copy(text)
+    root.after(100, show_copy_popup)  # Exibir o popup após 100ms
 
-def create_image_label(parent, image_url, row, column, padx=0, pady=10, sticky="w"):
-    """Função para criar um label de imagem com parâmetros ajustáveis"""
-    image = download_image(image_url)
-    image.thumbnail((200, 200))
-    photo = ImageTk.PhotoImage(image)
-    image_label = tk.Label(parent, image=photo, bg=bg_color)
-    image_label.image = photo  # Manter referência da imagem para evitar garbage collection
-    image_label.grid(row=row, column=column, padx=padx, pady=pady, sticky=sticky)
-    return image_label
+def show_copy_popup():
+    """Função para mostrar o popup de 'Link Copiado!'"""
+    messagebox.showinfo("Link Copiado", "O seu link foi copiado!")
 
-def create_video_button(parent, video_url, row, column, padx=10, pady=10, sticky="w"):
-    """Função para criar um botão de vídeo com parâmetros ajustáveis"""
-    video_button = ttk.Button(parent, text="Video do Jogo", command=lambda: open_link(video_url), style="Rounded.TButton")
-    video_button.grid(row=row, column=column, padx=padx, pady=pady, sticky=sticky)
-    return video_button
+def create_file_name_label(parent, text):
+    """Função para criar um label de nome de arquivo"""
+    file_name_label = tk.Label(
+        parent, text=text, font=("Helvetica", 16, "bold"), bg=bg_color, fg=fg_color
+    )
+    file_name_label.pack(anchor="w", pady=5)
 
-def create_navigation(parent, data, letter, search_text, page, total_pages):
-    """Função para criar a navegação de página"""
-    nav_frame = tk.Frame(parent, bg=bg_color)
-    nav_frame.grid(row=0, column=0, pady=10, sticky="ew")
+def create_magnet_links(parent, magnet_uris):
+    """Função para criar links de magnet com botão de copiar"""
+    if magnet_uris:
+        magnet_label = tk.Label(
+            parent, text="Magnet Links:", font=("Helvetica", 14), bg=bg_color, fg=fg_color
+        )
+        magnet_label.pack(anchor="w", pady=5)
+        for magnet in magnet_uris:
+            magnet_button = ttk.Button(
+                parent, text="Abrir Link", command=lambda url=magnet: open_link(url), style="Rounded.TButton"
+            )
+            magnet_button.pack(anchor="w", pady=2)
 
-    if page > 1:
-        prev_button = ttk.Button(nav_frame, text="Página Anterior", command=lambda: navigate_page(data, letter, search_text, page - 1), style="Rounded.TButton")
-        prev_button.pack(side=tk.LEFT, padx=5)
+            # Botão para copiar o link
+            copy_button = ttk.Button(
+                parent, text="Copiar Link", command=lambda url=magnet: copy_to_clipboard(url), style="Rounded.TButton"
+            )
+            copy_button.pack(anchor="w", pady=2)
 
-    page_label = tk.Label(nav_frame, text=f"Página {page} de {total_pages}", font=("Helvetica", 14), bg=bg_color, fg=fg_color)
-    page_label.pack(side=tk.LEFT, padx=5)
-
-    if page < total_pages:
-        next_button = ttk.Button(nav_frame, text="Próxima Página", command=lambda: navigate_page(data, letter, search_text, page + 1), style="Rounded.TButton")
-        next_button.pack(side=tk.LEFT, padx=5, pady=5)
-
-def show_content(data, letter=None, search_text="", page=1):
+def show_content(data, letter_filter=None, page=1):
     """Função para exibir as imagens e links de download em um painel"""
     for widget in content_frame.winfo_children():
         widget.destroy()
 
-    global current_page
+    global current_page, current_letter_filter
     current_page = page
+    current_letter_filter = letter_filter
 
-    filtered_data = [item for item in data if (not letter or item["fileName"].startswith(letter)) and (not search_text or search_text.lower() in item["fileName"].lower())]
-    total_pages = (len(filtered_data) + items_per_page - 1) // items_per_page
-
+    filtered_data = apply_filters(data['downloads'], letter_filter)
+    total_items = len(filtered_data)
+    total_pages = (total_items + items_per_page - 1) // items_per_page
     start_index = (page - 1) * items_per_page
-    end_index = start_index + items_per_page
+    end_index = min(start_index + items_per_page, total_items)
     page_data = filtered_data[start_index:end_index]
 
-    # Adicionar navegação de página no topo
-    create_navigation(content_frame, data, letter, search_text, page, total_pages)
-
-    row = 1
     for item in page_data:
-        item_frame = tk.Frame(content_frame, bg=bg_color)
-        item_frame.grid(row=row, column=0, pady=10, sticky="w")
-        item_frame.columnconfigure(0, weight=1)
+        item_frame = tk.Frame(content_frame, bg=bg_color, pady=10)
+        item_frame.pack(fill=tk.X)
 
-        separator_title = ttk.Separator(item_frame, orient='horizontal')
-        separator_title.grid(row=0, column=0, pady=5, sticky="ew")
+        create_file_name_label(item_frame, item["title"])
 
-        create_file_name_label(item_frame, item["fileName"], row=1, column=0, padx=200, pady=10, sticky="w")
+        file_description_label = tk.Label(
+            item_frame,
+            text=f"Tamanho: {item['fileSize']} | Data de Upload: {item['uploadDate']}",
+            wraplength=800,
+            bg=bg_color,
+            fg=fg_color,
+        )
+        file_description_label.pack(anchor="w", pady=5)
 
-        file_description_label = tk.Label(item_frame, text=item["fileDescription"], wraplength=600, bg=bg_color, fg=fg_color)
-        file_description_label.grid(row=2, column=0, pady=5, sticky="w")
+        create_magnet_links(item_frame, item["uris"])
 
-        create_image_label(item_frame, item["imageUrl"], row=3, column=0, padx=190, pady=10, sticky="w")
+        # Linha divisória
+        divider = tk.Frame(content_frame, bg="gray", height=1)
+        divider.pack(fill=tk.X, pady=5)
 
-        if "videoUrl" in item:
-            create_video_button(item_frame, item["videoUrl"], row=4, column=0, padx=245, pady=10, sticky="w")
+    create_navigation(content_frame, page, total_pages)
 
-        if "magnetUris" in item:
-            magnet_label = tk.Label(item_frame, text="Magnet Links:", font=("Helvetica", 14), bg=bg_color, fg=fg_color)
-            magnet_label.grid(row=5, column=0, pady=5, padx=231, sticky="w")
-            for i, magnet in enumerate(item["magnetUris"]):
-                magnet_button = ttk.Button(item_frame, text=magnet["name"], command=lambda url=magnet["uri"]: open_link(url), style="Rounded.TButton")
-                magnet_button.grid(row=6 + i, column=0, pady=2, padx=110, sticky="w")
+def apply_filters(downloads, letter_filter):
+    """Função para filtrar os downloads com base na pesquisa e letra"""
+    search_query = search_var.get().strip().lower()
+    filtered = downloads
+    if letter_filter and letter_filter != "#":
+        filtered = [item for item in filtered if item['title'].upper().startswith(letter_filter)]
+    elif letter_filter == "#":
+        filtered = [item for item in filtered if not item['title'][0].isalpha()]
+    if search_query:
+        filtered = [item for item in filtered if search_query in item['title'].lower()]
+    return filtered
 
-        if "browserUris" in item:
-            browser_label = tk.Label(item_frame, text="Browser Links:", font=("Helvetica", 14), bg=bg_color, fg=fg_color)
-            browser_label.grid(row=6 + len(item.get("magnetUris", [])), column=0, pady=5, padx=230, sticky="w")
-            for i, browser in enumerate(item["browserUris"]):
-                browser_button = ttk.Button(item_frame, text=browser["name"], command=lambda url=browser["uri"]: open_link(url), style="Rounded.TButton")
-                browser_button.grid(row=7 + len(item.get("magnetUris", [])) + i, column=0, pady=2, padx=110, sticky="w")
-
-        row += 4 + len(item.get("magnetUris", [])) + len(item.get("browserUris", []))
-
-    # Adicionar navegação de página no final
-    nav_frame = tk.Frame(content_frame, bg=bg_color)
-    nav_frame.grid(row=row, column=0, pady=10, sticky="ew")
+def create_navigation(parent, page, total_pages):
+    """Função para criar a navegação de página"""
+    nav_frame = tk.Frame(parent, bg=bg_color)
+    nav_frame.pack(fill=tk.X, pady=10)
 
     if page > 1:
-        prev_button = ttk.Button(nav_frame, text="Página Anterior", command=lambda: navigate_page(data, letter, search_text, page - 1), style="Rounded.TButton")
+        prev_button = ttk.Button(
+            nav_frame, text="Página Anterior", command=lambda: navigate_page(page - 1), style="Rounded.TButton"
+        )
         prev_button.pack(side=tk.LEFT, padx=5)
 
-    page_label = tk.Label(nav_frame, text=f"Página {page} de {total_pages}", font=("Helvetica", 14), bg=bg_color, fg=fg_color)
+    page_label = tk.Label(
+        nav_frame, text=f"Página {page} de {total_pages}", font=("Helvetica", 14), bg=bg_color, fg=fg_color
+    )
     page_label.pack(side=tk.LEFT, padx=5)
 
     if page < total_pages:
-        next_button = ttk.Button(nav_frame, text="Próxima Página", command=lambda: navigate_page(data, letter, search_text, page + 1), style="Rounded.TButton")
-        next_button.pack(side=tk.LEFT, padx=5, pady=5)
+        next_button = ttk.Button(
+            nav_frame, text="Próxima Página", command=lambda: navigate_page(page + 1), style="Rounded.TButton"
+        )
+        next_button.pack(side=tk.LEFT, padx=5)
 
-def navigate_page(data, letter, search_text, page):
+def navigate_page(page):
     """Função para navegar entre páginas e rolar para o topo"""
-    show_content(data, letter, search_text, page)
+    show_content(data_json, current_letter_filter, page)
     canvas.yview_moveto(0)
 
 def reset_content():
     """Função para redefinir o conteúdo e voltar à página inicial"""
+    search_var.set("")
     show_content(data_json, page=1)
 
 def update_json_url():
@@ -148,123 +141,132 @@ def update_json_url():
         return
     try:
         data_json = download_json(new_url)
-        show_content(data_json, page=1)
+        reset_content()
     except Exception as e:
         print(f"Erro ao baixar o JSON: {e}")
 
-def on_mouse_wheel(event):
-    """Função para rolar o canvas com o mouse"""
-    canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+def search_and_update():
+    """Função para buscar e atualizar a exibição com base na pesquisa"""
+    show_content(data_json, current_letter_filter, page=1)
+
+def _on_mousewheel(event):
+    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+def create_gog_download_button(parent):
+    """Função para criar o botão de GOG Download"""
+    gog_button = ttk.Button(
+        parent, text="Início", command=reset_content, style="Rounded.TButton"
+    )
+    gog_button.pack(side=tk.LEFT, padx=10, pady=5)
 
 def main():
-    global root, content_frame, bg_color, fg_color, data_json, search_entry, canvas, current_page, items_per_page, url_entry
+    global root, content_frame, bg_color, fg_color, data_json, canvas, current_page, items_per_page, url_entry, search_var, current_letter_filter, canvas_frame
 
     current_page = 1
+    current_letter_filter = None
     items_per_page = 20
 
-    try:
-        root = tk.Tk()
-        root.title("Download Black")
-        root.state('zoomed')
+    root = tk.Tk()
+    root.title("GOG Downloader")
+    root.geometry("1024x768")
 
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure("TLabel", font=("Helvetica", 12), foreground="white")
-        style.configure("Rounded.TButton", font=("Helvetica", 10), background="#0b57cf", foreground="white", borderwidth=0)
-        style.map("Rounded.TButton", background=[("active", "#0b57cf")], relief=[("pressed", "flat")])
+    style = ttk.Style()
+    style.theme_use('clam')
+    style.configure("TLabel", font=("Helvetica", 12), foreground="white")
+    style.configure(
+        "Rounded.TButton",
+        font=("Helvetica", 10),
+        background="#0b57cf",
+        foreground="white",
+        borderwidth=0,
+    )
+    style.map("Rounded.TButton", background=[("active", "#0b57cf")], relief=[("pressed", "flat")])
 
-        bg_color = "#1a1c1b"
-        fg_color = "white"
-        root.configure(bg=bg_color)
+    bg_color = "#1a1c1b"
+    fg_color = "white"
+    root.configure(bg=bg_color)
 
-        # Frame para o título
-        title_frame = tk.Frame(root, bg=bg_color)
-        title_frame.pack(side=tk.TOP, fill=tk.X, anchor="w")
+    # Título
+    title_frame = tk.Frame(root, bg=bg_color)
+    title_frame.pack(side=tk.TOP, fill=tk.X)
 
-        title_label = tk.Label(title_frame, text="DOWNLOAD BLACK", font=("Helvetica", 24, "bold"), bg=bg_color, fg=fg_color)
-        title_label.pack(side=tk.LEFT, padx=145, pady=10)
+    title_label = tk.Label(title_frame, text="GOG Downloader", font=("Helvetica", 18, "bold"), bg=bg_color, fg=fg_color)
+    title_label.pack(side=tk.LEFT, padx=10, pady=10)
 
-        # Frame para o botão Home
-        home_frame = tk.Frame(root, bg=bg_color)
-        home_frame.pack(side=tk.TOP, fill=tk.X, anchor="w")
+    # Botão "Início"
+    button_frame = tk.Frame(root, bg=bg_color)
+    button_frame.pack(side=tk.TOP, fill=tk.X)
+    create_gog_download_button(button_frame)
 
-        home_button = ttk.Button(home_frame, text="Home", command=reset_content, style="Rounded.TButton")
-        home_button.pack(side=tk.LEFT, padx=253, pady=5)
+    # Entrada de URL
+    url_frame = tk.Frame(root, bg=bg_color)
+    url_frame.pack(side=tk.TOP, fill=tk.X, pady=10)
 
-        # Frame para letras e barra de pesquisa
-        header_frame = tk.Frame(root, bg=bg_color)
-        header_frame.pack(side=tk.TOP, fill=tk.X, anchor="w")
+    url_entry = ttk.Entry(url_frame, width=50)
+    url_entry.insert(0, "Seu Link .json")
+    url_entry.pack(side=tk.LEFT, padx=10)
 
-        letters_frame = tk.Frame(header_frame, bg=bg_color)
-        letters_frame.pack(side=tk.LEFT, anchor="w")
+    url_button = ttk.Button(url_frame, text="Carregar JSON", command=update_json_url, style="Rounded.TButton")
+    url_button.pack(side=tk.LEFT, padx=5)
 
-        letters = ["#", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
-        
-        row = 0
-        col = 0
-        for letter in letters:
-            button = ttk.Button(letters_frame, text=letter, command=lambda l=letter: show_content(data_json, l, page=1), style="Rounded.TButton")
-            button.grid(row=row, column=col, padx=5, pady=5, sticky="w")
-            col += 1
-            if col == 6:
-                col = 0
-                row += 1
+    # Barra de pesquisa
+    search_frame = tk.Frame(root, bg=bg_color)
+    search_frame.pack(side=tk.TOP, fill=tk.X, pady=10)
 
-        search_frame = tk.Frame(root, bg=bg_color)
-        search_frame.pack(side=tk.TOP, pady=10, anchor="w")
+    search_var = tk.StringVar()
+    search_entry = ttk.Entry(search_frame, textvariable=search_var, width=50)
+    search_entry.pack(side=tk.LEFT, padx=10)
 
-        search_label = tk.Label(search_frame, text="Pesquisar:", font=("Helvetica", 14), bg=bg_color, fg=fg_color)
-        search_label.pack(side=tk.LEFT, padx=5)
+    search_button = ttk.Button(search_frame, text="Pesquisar", command=search_and_update, style="Rounded.TButton")
+    search_button.pack(side=tk.LEFT, padx=5)
 
-        search_entry = tk.Entry(search_frame, font=("Helvetica", 14), width=30)
-        search_entry.pack(side=tk.LEFT, padx=5)
+    # Letras organizadas em 6x5
+    letters_frame = tk.Frame(root, bg=bg_color)
+    letters_frame.pack(side=tk.TOP, fill=tk.X, pady=10)
 
-        search_button = ttk.Button(search_frame, text="🔍", command=lambda: show_content(data_json, search_text=search_entry.get(), page=1), style="Rounded.TButton")
-        search_button.pack(side=tk.LEFT, padx=5)
-
-        # Frame para entrada de URL do JSON
-        url_frame = tk.Frame(root, bg=bg_color)
-        url_frame.pack(side=tk.TOP, pady=10, anchor="w")
-
-        url_label = tk.Label(url_frame, text="URL do JSON:", font=("Helvetica", 14), bg=bg_color, fg=fg_color)
-        url_label.pack(side=tk.LEFT, padx=5)
-
-        url_entry = tk.Entry(url_frame, font=("Helvetica", 14), width=30)
-        url_entry.pack(side=tk.LEFT, padx=5)
-        url_entry.insert(0, "Seu Link .json")
-
-        update_button = ttk.Button(url_frame, text="Atualizar", command=update_json_url, style="Rounded.TButton")
-        update_button.pack(side=tk.LEFT, padx=5)
-
-        # Frame para o conteúdo com barra de rolagem
-        canvas = tk.Canvas(root, bg=bg_color, highlightthickness=0)  # Remover borda branca
-        scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
-        content_frame = tk.Frame(canvas, bg=bg_color)
-
-        content_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
+    letters = ["#", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+    row = 0
+    col = 0
+    for letter in letters:
+        button = ttk.Button(
+            letters_frame,
+            text=letter,
+            command=lambda l=letter: show_content(data_json, l, page=1),
+            style="Rounded.TButton"
         )
+        button.grid(row=row, column=col, padx=5, pady=5)
+        col += 1
+        if col == 6:
+            col = 0
+            row += 1
 
-        canvas.create_window((0, 0), window=content_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+    # Painel de conteúdo com scroll
+    canvas_frame = tk.Frame(root, bg=bg_color)
+    canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    canvas = tk.Canvas(canvas_frame, bg=bg_color, highlightthickness=0)
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Bind mouse wheel to scroll
-        canvas.bind_all("<MouseWheel>", on_mouse_wheel)
+    scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Não tentar baixar o JSON inicial se o campo estiver vazio
-        if default_url:
-            data_json = download_json(default_url)
-            show_content(data_json, page=1)
+    canvas.configure(yscrollcommand=scrollbar.set)
 
-        root.mainloop()
+    content_frame = tk.Frame(canvas, bg=bg_color)
+    canvas.create_window((0, 0), window=content_frame, anchor="nw")
+
+    content_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+    canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+    # Carregando JSON inicial
+    try:
+        data_json = download_json("https://example.com/your-data.json")
+        reset_content()
     except Exception as e:
-        print(f"Erro ao executar o script: {e}")
+        print(f"Erro ao carregar o JSON inicial: {e}")
+
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
